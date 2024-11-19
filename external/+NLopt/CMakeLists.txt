@@ -1,6 +1,6 @@
 rp_add_cmake_project(NLopt
   GIT_REPOSITORY      https://github.com/stevengj/nlopt.git
-  GIT_TAG             v2.6.1
+  GIT_TAG             v2.8.0
   CMAKE_ARGS
     -DNLOPT_PYTHON:BOOL=OFF
     -DNLOPT_OCTAVE:BOOL=OFF

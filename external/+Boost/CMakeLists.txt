@@ -26,11 +26,11 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     elseif (MSVC_VERSION LESS 1930)
     # 1920-1929 = VS 16.0 (v142 toolset)
         set(_boost_toolset "msvc-14.2")
-    elseif (MSVC_VERSION LESS 1940)
+    elseif ((MSVC_VERSION GREATER 1929) AND (MSVC_VERSION LESS 1950))
     # 1930-1939 = VS 17.0 (v143 toolset)
         set(_boost_toolset "msvc-14.3")
     else ()
-        message(FATAL_ERROR "Unsupported MSVC version")
+        message(FATAL_ERROR "Unsupported MSVC version: ${MSVC_VERSION}")
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (WIN32)
@@ -134,8 +134,8 @@ endif ()
 
 ExternalProject_Add(
     rp_Boost
-    URL "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.zip"
-    URL_HASH SHA256=f22143b5528e081123c3c5ed437e92f648fe69748e95fa6e2bd41484e2986cc3
+    URL "https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.zip"
+    # URL_HASH SHA256=f22143b5528e081123c3c5ed437e92f648fe69748e95fa6e2bd41484e2986cc3
     DOWNLOAD_EXTRACT_TIMESTAMP ON
     CONFIGURE_COMMAND "${_bootstrap_cmd}"
     PATCH_COMMAND ${_patch_command}
