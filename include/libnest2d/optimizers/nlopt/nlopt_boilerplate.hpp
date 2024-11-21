@@ -145,7 +145,9 @@ protected:
             localopt.set_lower_bounds(lower_bounds_);
             localopt.set_upper_bounds(upper_bounds_);
             opt_.set_local_optimizer(localopt);
-        default: ;
+            break;
+        default: 
+            break;
         }
 
         double abs_diff = stopcr_.absolute_score_difference;

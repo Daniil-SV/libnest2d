@@ -438,14 +438,14 @@ public:
 private:
 
     // Norming factor for the optimization function
-    const double norm_;
-    Pile merged_pile_;
+    const double m_norming_factor;
+    Pile m_merged_pile;
 
 public:
 
     inline explicit _NofitPolyPlacer(const BinType& bin):
         Base(bin),
-        norm_(std::sqrt(sl::area(bin)))
+        m_norming_factor(std::sqrt(sl::area(bin)))
     {
         // In order to not have items out of bin, it will be shrinked by an
         // very little empiric offset value.
@@ -609,45 +609,45 @@ private:
     template<class Range = ConstItemRange<typename Base::DefaultIter>>
     PackResult _trypack(
             Item& item,
-            const Range& remaining = Range()) {
+            const Range& remains_range = Range()) {
 
         PackResult ret;
 
         bool can_pack = false;
         double best_overfit = std::numeric_limits<double>::max();
 
-        ItemGroup remlist;
-        if(remaining.valid) {
-            remlist.insert(remlist.end(), remaining.from, remaining.to);
+        ItemGroup remains{};
+        if(remains_range.valid) {
+            remains.insert(remains.end(), remains_range.from, remains_range.to);
         }
 
         double global_score = std::numeric_limits<double>::max();
 
-        auto initial_tr = item.translation();
-        auto initial_rot = item.rotation();
-        Vertex final_tr = {0, 0};
-        Radians final_rot = initial_rot;
+        auto initial_translation = item.translation();
+        auto initial_rotation = item.rotation();
+        Vertex final_translation = {0, 0};
+        Radians final_rotation = initial_rotation;
         Shapes nfps;
 
         auto& bin = bin_;
-        double norm = norm_;
-        auto pbb = sl::boundingBox(merged_pile_);
+        double norm = m_norming_factor;
+        auto pilebb = sl::boundingBox(m_merged_pile);
         auto binbb = sl::boundingBox(bin);
 
         // This is the kernel part of the object function that is
         // customizable by the library client
-        std::function<double(const Item&)> _objfunc;
-        if(config_.object_function) _objfunc = config_.object_function;
+        std::function<double(const Item&)> object_function;
+        if(config_.object_function) object_function = config_.object_function;
         else {
 
             // Inside check has to be strict if no alignment was enabled
             std::function<double(const Box&)> ins_check;
             if(config_.alignment == Config::Alignment::DONT_ALIGN)
                 ins_check = [&binbb, norm](const Box& fullbb) {
-                    double ret = 0;
+                    double result = 0;
                     if(!sl::isInside(fullbb, binbb))
-                        ret += norm;
-                    return ret;
+                        result += norm;
+                    return result;
                 };
             else
                 ins_check = [&bin](const Box& fullbb) {
@@ -656,16 +656,17 @@ private:
                     return std::pow(miss, 2);
                 };
 
-            _objfunc = [norm, binbb, pbb, ins_check](const Item& item)
+            object_function = [norm, binbb, pilebb, ins_check](const Item& item)
             {
-                auto ibb = item.boundingBox();
-                auto fullbb = sl::boundingBox(pbb, ibb);
+                auto itembb = item.boundingBox();
+                auto fullbb = sl::boundingBox(pilebb, itembb);
 
-                double score = pl::distance(ibb.center(),
-                                            binbb.center());
-                score /= norm;
+                double score = pl::distance(itembb.minCorner(),
+                                            binbb.minCorner());
+                score = (fullbb.width() + fullbb.height()) / norm;
 
                 score += ins_check(fullbb);
+
 
                 return score;
             };
@@ -673,33 +674,33 @@ private:
 
         if(items_.empty()) {
             setInitialPosition(item);
-            auto best_tr = item.translation();
-            auto best_rot = item.rotation();
+            auto best_translation = item.translation();
+            auto best_rotation = item.rotation();
             best_overfit = overfit(item.transformedShape(), bin_);
 
             for(auto rot : config_.rotations) {
-                item.translation(initial_tr);
-                item.rotation(initial_rot + rot);
+                item.translation(initial_translation);
+                item.rotation(initial_rotation + rot);
                 setInitialPosition(item);
-                double of = 0.;
-                if ((of = overfit(item.transformedShape(), bin_)) < best_overfit) {
-                    best_overfit = of;
-                    best_tr = item.translation();
-                    best_rot = item.rotation();
+                double current_overfit = 0.;
+                if ((current_overfit = overfit(item.transformedShape(), bin_)) < best_overfit) {
+                    best_overfit = current_overfit;
+                    best_translation = item.translation();
+                    best_rotation = item.rotation();
                 }
             }
 
             can_pack = best_overfit <= 0;
-            item.rotation(best_rot);
-            item.translation(best_tr);
+            item.rotation(best_rotation);
+            item.translation(best_translation);
         } else {
 
-            Pile merged_pile = merged_pile_;
+            Pile merged_pile = m_merged_pile;
 
-            for(auto rot : config_.rotations) {
+            for(auto rotation : config_.rotations) {
 
-                item.translation(initial_tr);
-                item.rotation(initial_rot + rot);
+                item.translation(initial_translation);
+                item.rotation(initial_rotation + rotation);
                 item.boundingBox(); // fill the bb cache
 
                 // place the new item outside of the print bed to make sure
@@ -721,13 +722,13 @@ private:
                 }
 
                 // Our object function for placement
-                auto rawobjfunc = [_objfunc, iv, startpos]
+                auto rawobjfunc = [object_function, iv, startpos]
                         (Vertex v, Item& itm)
                 {
                     auto d = v - iv;
                     d += startpos;
                     itm.translation(d);
-                    return _objfunc(itm);
+                    return object_function(itm);
                 };
 
                 auto getNfpPoint = [&ecache](const Optimum& opt)
@@ -764,7 +765,7 @@ private:
                 if(config_.parallel) policy |= std::launch::async;
 
                 if(config_.before_packing)
-                    config_.before_packing(merged_pile, items_, remlist);
+                    config_.before_packing(merged_pile, items_, remains);
 
                 using OptResult = opt::Result<double>;
                 using OptResults = std::vector<OptResult>;
@@ -877,22 +878,22 @@ private:
                 }
 
                 if( best_score < global_score ) {
-                    auto d = getNfpPoint(optimum) - iv;
-                    d += startpos;
-                    final_tr = d;
-                    final_rot = initial_rot + rot;
+                    auto nfp_point = getNfpPoint(optimum) - iv;
+                    nfp_point += startpos;
+                    final_translation = nfp_point;
+                    final_rotation = initial_rotation + rotation;
                     can_pack = true;
                     global_score = best_score;
                 }
             }
 
-            item.translation(final_tr);
-            item.rotation(final_rot);
+            item.translation(final_translation);
+            item.rotation(final_rotation);
         }
 
         if(can_pack) {
             ret = PackResult(item);
-            merged_pile_ = nfp::merge(merged_pile_, item.transformedShape());
+            m_merged_pile = nfp::merge(m_merged_pile, item.transformedShape());
         } else {
             ret = PackResult(best_overfit);
         }

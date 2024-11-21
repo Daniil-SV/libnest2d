@@ -33,6 +33,9 @@ protected:
     {
         // Safety test: try to pack each item into an empty bin. If it fails
         // then it should be removed from the list
+		Placer p{ bin };
+		p.configure(pcfg);
+
         auto it = c.begin();
         while (it != c.end() && !stopcond_()) {
 
@@ -43,8 +46,6 @@ protected:
             const Item& itm = *it;
             Item cpy{itm};
 
-            Placer p{bin};
-            p.configure(pcfg);
             if (itm.area() <= 0 || !p.pack(cpy)) {
                 static_cast<Item&>(*it).binId(BIN_ID_UNSET);
                 it = c.erase(it);
