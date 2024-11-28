@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.11)
 
 project(Libnest2D)
 
@@ -17,7 +17,7 @@ option(LIBNEST2D_BUILD_UNITTESTS "If enabled, googletest framework will be downl
 
 option(BUILD_SHARED_LIBS "Build shared libs instead of static (applies for dependencies as well)" OFF)
 
-option(LIBNEST2D_HEADER_ONLY "If enabled static library will not be built." ON)
+option(LIBNEST2D_HEADER_ONLY "If enabled static library will not be built." OFF)
 
 set(GEOMETRY_BACKENDS clipper boost eigen)
 set(LIBNEST2D_GEOMETRIES clipper CACHE STRING "Geometry backend")
@@ -113,67 +113,8 @@ if(LIBNEST2D_BUILD_UNITTESTS)
 endif()
 
 include(CMakePackageConfigHelpers)
-
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"     
     VERSION 1.0
     COMPATIBILITY AnyNewerVersion
 )
-
-export(EXPORT ${PROJECT_NAME}Targets 
-       FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake" 
-       NAMESPACE ${PROJECT_NAME}::
-)
-
-install(TARGETS libnest2d libnest2d_headeronly ${LIBNAME} 
-        EXPORT ${PROJECT_NAME}Targets
-)
-
-configure_file(cmake_modules/Config.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-  @ONLY
-)
-
-set(ConfigPackageLocation lib/cmake/${PROJECT_NAME})
-
-install(EXPORT ${PROJECT_NAME}Targets
-  FILE
-    ${PROJECT_NAME}Targets.cmake
-  NAMESPACE
-    ${PROJECT_NAME}::
-  DESTINATION
-    ${ConfigPackageLocation}
-)
-
-foreach (srcfile IN ITEMS ${LIBNEST2D_SRCFILES})
-  get_filename_component(srcfile_dir ${srcfile} DIRECTORY)
-  install(
-    FILES
-      ${PROJECT_SOURCE_DIR}/${srcfile} 
-    DESTINATION
-      ${srcfile_dir}
-    COMPONENT
-      Devel
-  )
-endforeach()
-
-install(
-  FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindClipper.cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindNLopt.cmake"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindTBB.cmake"
-  DESTINATION
-    ${ConfigPackageLocation}
-  COMPONENT
-    Devel
-)
-
-rp_install_versions_file(${ConfigPackageLocation})
-
-foreach(p ${LIBNEST2D_PUBLIC_PACKAGES})
-    set(_pkgstr "${_pkgstr} ${p}")
-endforeach()
-message(STATUS "Installed Libnest2DConfig.cmake will require packages:${_pkgstr}")
-
