@@ -1,6 +1,7 @@
+include(CMakeDependentOption)
 
 set(RP_REPOSITORY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external CACHE STRING "Package repository location")
-set(RP_BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external CACHE STRING "Package repository location")
+cmake_dependent_option(RP_FORCE_DOWNLOADING "Force downloading packages even if found." OFF "RP_ENABLE_DOWNLOADING" OFF)
 
 macro(require_package RP_ARGS_PACKAGE)    
     set(options REQUIRED QUIET)
