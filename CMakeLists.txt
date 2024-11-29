@@ -39,6 +39,14 @@ if(${OPTIMIZER_TYPE} EQUAL -1)
     message(FATAL_ERROR "Option ${LIBNEST2D_OPTIMIZER} not supported, valid entries are ${OPTIMIZERS}")
 endif()
 
+#set(THREADING std tbb omp none)
+#set(LIBNEST2D_THREADING std CACHE STRING "Multithreading")
+#set_property(CACHE LIBNEST2D_THREADING PROPERTY STRINGS ${THREADING})
+#list(FIND THREADING ${LIBNEST2D_THREADING} THREADING_TYPE)
+#if(${THREADING_TYPE} EQUAL -1)
+#    message(FATAL_ERROR "Option ${LIBNEST2D_THREADING} not supported, valid entries are ${THREADING}")
+#endif()
+
 if (${LIBNEST2D_WITH_THREADING})
     if (${LIBNEST2D_THREADING_OMP})
         message(STATUS "Libnest2d threading: OpenMP")
@@ -55,7 +63,7 @@ else()
     set(THREADING none)
 endif()
 
-set_property(CACHE LIBNEST2D_THREADING PROPERTY STRINGS ${THREADING})
+set(LIBNEST2D_THREADING ${THREADING} CACHE STRING "Multithreading")
 
 add_library(libnest2d_headeronly INTERFACE)
 
