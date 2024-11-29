@@ -19,6 +19,10 @@ option(BUILD_SHARED_LIBS "Build shared libs instead of static (applies for depen
 
 option(LIBNEST2D_HEADER_ONLY "If enabled static library will not be built." OFF)
 
+option(LIBNEST2D_WITH_THREADING "Build libnest2d with Multi-threading support" ON)
+option(LIBNEST2D_THREADING_OMP "Use OpenMP for libnest2d Multi-threading" OFF)
+option(LIBNEST2D_THREADING_TBB "Use TBB for libnest2d Multi-threading" OFF)
+
 set(GEOMETRY_BACKENDS clipper boost eigen)
 set(LIBNEST2D_GEOMETRIES clipper CACHE STRING "Geometry backend")
 set_property(CACHE LIBNEST2D_GEOMETRIES PROPERTY STRINGS ${GEOMETRY_BACKENDS})
@@ -35,13 +39,23 @@ if(${OPTIMIZER_TYPE} EQUAL -1)
     message(FATAL_ERROR "Option ${LIBNEST2D_OPTIMIZER} not supported, valid entries are ${OPTIMIZERS}")
 endif()
 
-set(THREADING std tbb omp none)
-set(LIBNEST2D_THREADING std CACHE STRING "Multithreading")
-set_property(CACHE LIBNEST2D_THREADING PROPERTY STRINGS ${THREADING})
-list(FIND THREADING ${LIBNEST2D_THREADING} THREADING_TYPE)
-if(${THREADING_TYPE} EQUAL -1)
-    message(FATAL_ERROR "Option ${LIBNEST2D_THREADING} not supported, valid entries are ${THREADING}")
+if (${LIBNEST2D_WITH_THREADING})
+    if (${LIBNEST2D_THREADING_OMP})
+        message(STATUS "Libnest2d threading: OpenMP")
+        set(THREADING omp)
+    elseif(${LIBNEST2D_THREADING_TBB})
+        message(STATUS "Libnest2d threading: TBB")
+        set(THREADING tbb)
+    else()
+        message(STATUS "Libnest2d threading: std")
+        set(THREADING std)
+    endif()
+else()
+    message(STATUS "Libnest2d threading: none")
+    set(THREADING none)
 endif()
+
+set_property(CACHE LIBNEST2D_THREADING PROPERTY STRINGS ${THREADING})
 
 add_library(libnest2d_headeronly INTERFACE)
 
