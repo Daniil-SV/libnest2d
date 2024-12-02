@@ -29,6 +29,10 @@ namespace libnest2d {
         struct NfpPConfig {
 
             using ItemGroup = _ItemGroup<RawShape>;
+            using ObjectCallback = std::function<void(const nfp::Shapes<RawShape>&,   // merged pile
+                const ItemGroup&,                                               // packed items
+                const ItemGroup&                                                // remaining items
+                )>;
 
             enum class Alignment {
                 CENTER,
@@ -112,10 +116,8 @@ namespace libnest2d {
              * into an L shape. This parameter can be used to make these kind of
              * decisions (for you or a more intelligent AI).
              */
-            std::function<void(const nfp::Shapes<RawShape>&, // merged pile
-                const ItemGroup&,             // packed items
-                const ItemGroup&              // remaining items
-                )> before_packing;
+            ObjectCallback before_packing;
+            ObjectCallback after_packing;
 
             std::function<void(const ItemGroup&, NfpPConfig& config)> on_preload;
 
@@ -675,6 +677,9 @@ namespace libnest2d {
                         };
                 }
 
+				if (config_.before_packing)
+					config_.before_packing(m_merged_pile, items_, remains);
+
                 if (items_.empty()) {
                     setInitialPosition(item);
                     auto best_translation = item.translation();
@@ -763,9 +768,6 @@ namespace libnest2d {
                         double best_score = std::numeric_limits<double>::max();
                         std::launch policy = std::launch::deferred;
                         if (config_.parallel) policy |= std::launch::async;
-
-                        if (config_.before_packing)
-                            config_.before_packing(merged_pile, items_, remains);
 
                         using OptResult = opt::Result<double>;
                         using OptResults = std::vector<OptResult>;
@@ -902,6 +904,9 @@ namespace libnest2d {
                 else {
                     ret = PackResult(best_overfit);
                 }
+
+				if (config_.after_packing)
+					config_.after_packing(m_merged_pile, items_, remains);
 
                 return ret;
             }
