@@ -573,7 +573,7 @@ namespace libnest2d {
                         auto subnfp_r = noFitPolygon<NfpLevel::CONVEX_ONLY>(fixedp, orbp);
                         correctNfpPosition(subnfp_r, sh, trsh);
                         nfps[n] = subnfp_r.first;
-                    });
+                    }, config_.parallel);
 
                 return nfp::merge(nfps);
             }
@@ -766,8 +766,6 @@ namespace libnest2d {
 
                         Optimum optimum(0, 0);
                         double best_score = std::numeric_limits<double>::max();
-                        std::launch policy = std::launch::deferred;
-                        if (config_.parallel) policy |= std::launch::async;
 
                         using OptResult = opt::Result<double>;
                         using OptResults = std::vector<OptResult>;
@@ -808,7 +806,7 @@ namespace libnest2d {
                                     catch (std::exception& e) {
                                         derr() << "ERROR: " << e.what() << "\n";
                                     }
-                                }, policy);
+                                }, config_.parallel);
 
                             auto resultcomp =
                                 [](const OptResult& r1, const OptResult& r2) {
@@ -862,7 +860,7 @@ namespace libnest2d {
                                         catch (std::exception& e) {
                                             derr() << "ERROR: " << e.what() << "\n";
                                         }
-                                    }, policy);
+                                    }, config_.parallel);
 
                                 auto hmr = *std::min_element(results.begin(),
                                     results.end(),
