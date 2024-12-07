@@ -8,9 +8,21 @@ namespace libnest2d { namespace selections {
 template<class RawShape>
 class _FirstFitSelection: public SelectionBoilerplate<RawShape> {
     using Base = SelectionBoilerplate<RawShape>;
+
+public:
+    /**
+     * @brief The Config for FirstFit heuristic.
+     */
+    struct Config {
+
+        /*
+        * If true, checks all items to see if they can be packed into a texture. Can take a long time when there are a lot of items.
+        */
+        bool verify_items = true;
+    };
+
 public:
     using typename Base::Item;
-    using Config = int; //dummy
 
 private:
     using Base::packed_bins_;
@@ -18,10 +30,13 @@ private:
     using Container = ItemGroup;//typename std::vector<_Item<RawShape>>;
 
     Container store_;
+    Config config_;
 
 public:
 
-    void configure(const Config& /*config*/) { }
+	inline void configure(const Config& config) {
+		config_ = config;
+	}
 
     template<class TPlacer, class TIterator,
              class TBin = typename PlacementStrategyLike<TPlacer>::BinType,
@@ -79,7 +94,10 @@ public:
 
         auto& cancelled = this->stopcond_;
         
-        this->template remove_unpackable_items<Placer>(store_, bin, pconfig);
+        if (config_.verify_items)
+        {
+            this->template remove_unpackable_items<Placer>(store_, bin, pconfig);
+        }
 
         auto it = store_.begin();
 
