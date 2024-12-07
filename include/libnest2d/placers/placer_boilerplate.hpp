@@ -9,8 +9,8 @@ struct EmptyConfig {};
 
 template<class Subclass, class RawShape, class TBin, class Cfg = EmptyConfig>
 class PlacerBoilerplate {
-    mutable bool farea_valid_ = false;
     mutable double farea_ = 0.0;
+    mutable double binarea_ = 0.0;
 public:
     using ShapeType = RawShape;
     using Item = _Item<RawShape>;
@@ -46,12 +46,14 @@ public:
     inline PlacerBoilerplate(const BinType& bin, unsigned cap = 50): bin_(bin)
     {
         items_.reserve(cap);
+        binarea_ = sl::area(bin);
     }
 
     inline const BinType& bin() const BP2D_NOEXCEPT { return bin_; }
 
     template<class TB> inline void bin(TB&& b) {
         bin_ = std::forward<BinType>(b);
+        binarea_ = sl::area(bin_)
     }
 
     inline void configure(const Config& config) BP2D_NOEXCEPT {
@@ -59,18 +61,19 @@ public:
     }
 
     template<class Range = ConstItemRange<DefaultIter>>
-    bool pack(Item& item, const Range& rem = Range()) {
+    bool pack(Item& item, const Range& rem = Range(), int obj_distance = 0) {
+        if (item.area() >= freeArea()) return false;
+
         auto&& r = static_cast<Subclass*>(this)->trypack(item, rem);
         if(r) {
             items_.emplace_back(*(r.item_ptr_));
-            farea_valid_ = false;
+            farea_ += item.area();
         }
         return r;
     }
 
     void preload(const ItemGroup& packeditems) {
         items_.insert(items_.end(), packeditems.begin(), packeditems.end());
-        farea_valid_ = false;
     }
 
     void accept(PackResult& r) {
@@ -78,7 +81,6 @@ public:
             r.item_ptr_->translation(r.move_);
             r.item_ptr_->rotation(r.rot_);
             items_.emplace_back(*(r.item_ptr_));
-            farea_valid_ = false;
         }
     }
 
@@ -91,21 +93,15 @@ public:
 
     inline void clearItems() {
         items_.clear();
-        farea_valid_ = false;
     }
 
     inline double filledArea() const {
-        if(farea_valid_) return farea_;
-        else {
-            farea_ = .0;
-            std::for_each(items_.begin(), items_.end(),
-                          [this] (Item& item) {
-                farea_ += item.area();
-            });
-            farea_valid_ = true;
-        }
-
         return farea_;
+    }
+
+    inline double freeArea() const
+    {
+        return binarea_ - farea_;
     }
 
 protected:

@@ -319,14 +319,19 @@ merge(const TMultiShape<PolygonImpl>& shapes)
 {
     ClipperLib::Clipper clipper(ClipperLib::ioReverseSolution);
 
-    bool closed = true;
-    bool valid = true;
+	bool closed = true;
+	bool valid = true;
 
-    for(auto& path : shapes) {
-        valid &= clipper.AddPath(path.Contour, ClipperLib::ptSubject, closed);
+	for (auto& path : shapes) {
+		valid &= clipper.AddPath(path.Contour, ClipperLib::ptSubject, closed);
+        if (!valid) assert(0);
 
-        for(auto& h : path.Holes)
-            valid &= clipper.AddPath(h, ClipperLib::ptSubject, closed);
+        for (auto& h : path.Holes)
+        {
+			valid &= clipper.AddPath(h, ClipperLib::ptSubject, closed);
+			if (!valid) assert(0);
+        }
+            
     }
 
     if(!valid) throw GeometryException(GeomErr::MERGE);
