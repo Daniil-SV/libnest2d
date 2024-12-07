@@ -599,6 +599,14 @@ namespace libnest2d {
                 }
             };
 
+            struct ResultCandidate
+            {
+                double score = std::numeric_limits<double>::max();
+				Vertex final_translation = { 0, 0 };
+				Radians final_rotation = 0;
+                double best_overfit = 0;
+            };
+
             class Optimizer : public opt::TOptimizer<opt::Method::L_SUBPLEX> {
             public:
                 Optimizer(float accuracy = 1.f) {
@@ -619,7 +627,6 @@ namespace libnest2d {
                 PackResult ret;
 
                 bool can_pack = false;
-                double best_overfit = std::numeric_limits<double>::max();
 
                 ItemGroup remains{};
                 if (remains_range.valid) {
@@ -627,12 +634,12 @@ namespace libnest2d {
                 }
 
                 double global_score = std::numeric_limits<double>::max();
-
+                double best_overfit = std::numeric_limits<double>::max();
                 auto initial_translation = item.translation();
                 auto initial_rotation = item.rotation();
                 Vertex final_translation = { 0, 0 };
                 Radians final_rotation = initial_rotation;
-                Shapes nfps;
+                //Shapes nfps;
 
                 auto& bin = bin_;
                 double norm = m_norming_factor;
@@ -704,195 +711,224 @@ namespace libnest2d {
                 }
                 else {
 
-                    Pile merged_pile = m_merged_pile;
+                    //Pile merged_pile = m_merged_pile;
 
-                    for (auto rotation : config_.rotations) {
+                    std::vector<ResultCandidate> candidates;
+                    candidates.resize(config_.rotations.size());
 
-                        item.translation(initial_translation);
-                        item.rotation(initial_rotation + rotation);
-                        item.boundingBox(); // fill the bb cache
+                    __parallel::enumerate(config_.rotations.begin(), config_.rotations.end(), 
+                        [&object_function, &bin, &item, &candidates, &initial_rotation, &initial_translation, this](double rotation, size_t n)
+                        {
+                            Pile merged_pile = m_merged_pile;
+                            double best_local_overfit = std::numeric_limits<double>::max();
 
-                        nfps = calcnfp(item, Lvl<MaxNfpLevel::value>());
+                            Item current_item = item;
+                            current_item.translation(initial_translation);
+                            current_item.rotation(initial_rotation + rotation);
+                            current_item.boundingBox(); // fill the bb cache
 
-                        auto iv = item.referenceVertex();
+							Shapes nfps = calcnfp(current_item, Lvl<MaxNfpLevel::value>());
 
-                        auto startpos = item.translation();
+							auto iv = current_item.referenceVertex();
 
-                        std::vector<Edges> ecache;
-                        ecache.reserve(nfps.size());
+							auto startpos = current_item.translation();
 
-                        for (auto& nfp : nfps) {
-                            ecache.emplace_back(nfp);
-                            ecache.back().accuracy(config_.accuracy);
-                        }
+							std::vector<Edges> ecache;
+							ecache.reserve(nfps.size());
 
-                        // Our object function for placement
-                        auto rawobjfunc = [object_function, iv, startpos]
-                        (Vertex v, Item& itm)
-                            {
-                                auto d = v - iv;
-                                d += startpos;
-                                itm.translation(d);
-                                return object_function(itm);
-                            };
+							for (auto& nfp : nfps) {
+								ecache.emplace_back(nfp);
+								ecache.back().accuracy(config_.accuracy);
+							}
 
-                        auto getNfpPoint = [&ecache](const Optimum& opt)
-                            {
-                                return opt.hidx < 0 ? ecache[opt.nfpidx].coords(opt.relpos) :
-                                    ecache[opt.nfpidx].coords(opt.hidx, opt.relpos);
-                            };
+							// Our object function for placement
+							auto rawobjfunc = [object_function, iv, startpos]
+							(Vertex v, Item& itm)
+								{
+									auto d = v - iv;
+									d += startpos;
+									itm.translation(d);
+									return object_function(itm);
+								};
 
-                        auto alignment = config_.alignment;
+							auto getNfpPoint = [&ecache](const Optimum& opt)
+								{
+									return opt.hidx < 0 ? ecache[opt.nfpidx].coords(opt.relpos) :
+										ecache[opt.nfpidx].coords(opt.hidx, opt.relpos);
+								};
 
-                        auto boundaryCheck = [alignment, &merged_pile, &getNfpPoint,
-                            &item, &bin, &iv, &startpos](const Optimum& o)
-                            {
-                                auto v = getNfpPoint(o);
-                                auto d = v - iv;
-                                d += startpos;
-                                item.translation(d);
+							auto alignment = config_.alignment;
 
-                                merged_pile.emplace_back(item.transformedShape());
-                                auto chull = sl::convexHull(merged_pile);
-                                merged_pile.pop_back();
+							auto boundaryCheck = [alignment, &merged_pile, &getNfpPoint,
+								&current_item, &bin, &iv, &startpos](const Optimum& o)
+								{
+									auto v = getNfpPoint(o);
+									auto d = v - iv;
+									d += startpos;
+                                    current_item.translation(d);
 
-                                double miss = 0;
-                                if (alignment == Config::Alignment::DONT_ALIGN)
-                                    miss = sl::isInside(chull, bin) ? -1.0 : 1.0;
-                                else miss = overfit(chull, bin);
+									merged_pile.emplace_back(current_item.transformedShape());
+									auto chull = sl::convexHull(merged_pile);
+									merged_pile.pop_back();
 
-                                return miss;
-                            };
+									double miss = 0;
+									if (alignment == Config::Alignment::DONT_ALIGN)
+										miss = sl::isInside(chull, bin) ? -1.0 : 1.0;
+									else miss = overfit(chull, bin);
 
-                        Optimum optimum(0, 0);
-                        double best_score = std::numeric_limits<double>::max();
+									return miss;
+								};
 
-                        using OptResult = opt::Result<double>;
-                        using OptResults = std::vector<OptResult>;
+							Optimum optimum(0, 0);
+							double best_score = std::numeric_limits<double>::max();
 
-                        // Local optimization with the four polygon corners as
-                        // starting points
-                        for (unsigned ch = 0; ch < ecache.size(); ch++) {
-                            auto& cache = ecache[ch];
+							using OptResult = opt::Result<double>;
+							using OptResults = std::vector<OptResult>;
 
-                            OptResults results(cache.corners().size());
+							// Local optimization with the four polygon corners as
+							// starting points
+							for (unsigned ch = 0; ch < ecache.size(); ch++) {
+								auto& cache = ecache[ch];
 
-                            auto& rofn = rawobjfunc;
-                            auto& nfpoint = getNfpPoint;
-                            float accuracy = config_.accuracy;
+								OptResults results(cache.corners().size());
 
-                            __parallel::enumerate(
-                                cache.corners().begin(),
-                                cache.corners().end(),
-                                [&results, &item, &rofn, &nfpoint, ch, accuracy]
-                                (double pos, size_t n)
-                                {
-                                    Optimizer solver(accuracy);
+								auto& rofn = rawobjfunc;
+								auto& nfpoint = getNfpPoint;
+								float accuracy = config_.accuracy;
 
-                                    Item itemcpy = item;
-                                    auto contour_ofn = [&rofn, &nfpoint, ch, &itemcpy]
-                                    (double relpos)
-                                        {
-                                            Optimum op(relpos, ch);
-                                            return rofn(nfpoint(op), itemcpy);
-                                        };
-
-                                    try {
-                                        results[n] = solver.optimize_min(contour_ofn,
-                                            opt::initvals<double>(pos),
-                                            opt::bound<double>(0, 1.0)
-                                        );
-                                    }
-                                    catch (std::exception& e) {
-                                        derr() << "ERROR: " << e.what() << "\n";
-                                    }
-                                }, config_.parallel);
-
-                            auto resultcomp =
-                                [](const OptResult& r1, const OptResult& r2) {
-                                return r1.score < r2.score;
-                                };
-
-                            auto minimal_result = *std::min_element(results.begin(), results.end(),
-                                resultcomp);
-
-                            if (minimal_result.score < best_score) {
-                                Optimum o(std::get<0>(minimal_result.optimum), ch, -1);
-                                double miss = boundaryCheck(o);
-                                if (miss <= 0) {
-                                    best_score = minimal_result.score;
-                                    optimum = o;
-                                }
-                                else {
-                                    best_overfit = std::min(miss, best_overfit);
-                                }
-                            }
-
-                            for (unsigned hidx = 0; hidx < cache.holeCount(); ++hidx) {
-                                results.clear();
-                                results.resize(cache.corners(hidx).size());
-
-                                // TODO : use parallel for
-                                __parallel::enumerate(cache.corners(hidx).begin(),
-                                    cache.corners(hidx).end(),
-                                    [&results, &item, &nfpoint,
-                                    &rofn, ch, hidx, accuracy]
+                                __parallel::enumerate(
+                                    cache.corners().begin(),
+                                    cache.corners().end(),
+                                    [&results, &current_item, &rofn, &nfpoint, ch, accuracy]
                                     (double pos, size_t n)
                                     {
                                         Optimizer solver(accuracy);
 
-                                        Item itmcpy = item;
-                                        auto hole_ofn =
-                                            [&rofn, &nfpoint, ch, hidx, &itmcpy]
-                                            (double pos)
+                                        Item itemcpy = current_item;
+                                        auto contour_ofn = [&rofn, &nfpoint, ch, &itemcpy]
+                                        (double relpos)
                                             {
-                                                Optimum opt(pos, ch, hidx);
-                                                return rofn(nfpoint(opt), itmcpy);
+                                                Optimum op(relpos, ch);
+                                                return rofn(nfpoint(op), itemcpy);
                                             };
 
                                         try {
-                                            results[n] = solver.optimize_min(hole_ofn,
+                                            results[n] = solver.optimize_min(contour_ofn,
                                                 opt::initvals<double>(pos),
                                                 opt::bound<double>(0, 1.0)
                                             );
-
                                         }
                                         catch (std::exception& e) {
                                             derr() << "ERROR: " << e.what() << "\n";
                                         }
                                     }, config_.parallel);
 
-                                auto hmr = *std::min_element(results.begin(),
-                                    results.end(),
+                                auto resultcomp =
+                                    [](const OptResult& r1, const OptResult& r2) {
+                                    return r1.score < r2.score;
+                                    };
+
+                                auto minimal_result = *std::min_element(results.begin(), results.end(),
                                     resultcomp);
 
-                                if (hmr.score < best_score) {
-                                    Optimum o(std::get<0>(hmr.optimum),
-                                        ch, hidx);
+                                if (minimal_result.score < best_score) {
+                                    Optimum o(std::get<0>(minimal_result.optimum), ch, -1);
                                     double miss = boundaryCheck(o);
-                                    if (miss <= 0.0) {
-                                        best_score = hmr.score;
+                                    if (miss <= 0) {
+                                        best_score = minimal_result.score;
                                         optimum = o;
                                     }
                                     else {
-                                        best_overfit = std::min(miss, best_overfit);
+                                        best_local_overfit = std::min(miss, best_local_overfit);
+                                    }
+                                }
+
+                                for (unsigned hidx = 0; hidx < cache.holeCount(); ++hidx) {
+                                    results.clear();
+                                    results.resize(cache.corners(hidx).size());
+
+                                    // TODO : use parallel for
+                                    __parallel::enumerate(cache.corners(hidx).begin(),
+                                        cache.corners(hidx).end(),
+                                        [&results, &current_item, &nfpoint,
+                                        &rofn, ch, hidx, accuracy]
+                                        (double pos, size_t n)
+                                        {
+                                            Optimizer solver(accuracy);
+
+                                            Item itmcpy = current_item;
+                                            auto hole_ofn =
+                                                [&rofn, &nfpoint, ch, hidx, &itmcpy]
+                                                (double pos)
+                                                {
+                                                    Optimum opt(pos, ch, hidx);
+                                                    return rofn(nfpoint(opt), itmcpy);
+                                                };
+
+                                            try {
+                                                results[n] = solver.optimize_min(hole_ofn,
+                                                    opt::initvals<double>(pos),
+                                                    opt::bound<double>(0, 1.0)
+                                                );
+
+                                            }
+                                            catch (std::exception& e) {
+                                                derr() << "ERROR: " << e.what() << "\n";
+                                            }
+                                        }, config_.parallel);
+
+                                    auto hmr = *std::min_element(results.begin(),
+                                        results.end(),
+                                        resultcomp);
+
+                                    if (hmr.score < best_score) {
+                                        Optimum o(std::get<0>(hmr.optimum),
+                                            ch, hidx);
+                                        double miss = boundaryCheck(o);
+                                        if (miss <= 0.0) {
+                                            best_score = hmr.score;
+                                            optimum = o;
+                                        }
+                                        else {
+                                            best_local_overfit = std::min(miss, best_local_overfit);
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (best_score < global_score) {
-                            auto nfp_point = getNfpPoint(optimum) - iv;
-                            nfp_point += startpos;
-                            final_translation = nfp_point;
-                            final_rotation = initial_rotation + rotation;
-                            can_pack = true;
-                            global_score = best_score;
-                        }
+                            {
+								auto nfp_point = getNfpPoint(optimum) - iv;
+								nfp_point += startpos;
+
+                                ResultCandidate& candidate = candidates[n];
+                                candidate.score = best_score;
+                                candidate.final_translation = nfp_point;
+                                candidate.final_rotation = initial_rotation + rotation;
+                                candidate.best_overfit = best_local_overfit;
+                            }
+                        }, config_.parallel);
+
+                    auto best_candidate = std::min_element(candidates.begin(), candidates.end(),
+                        [](const ResultCandidate& r1, const ResultCandidate& r2) {
+                            return r1.score < r2.score;
+                        });
+
+                    if (best_candidate->score >= global_score)
+                    {
+						best_overfit = (*std::min_element(candidates.begin(), candidates.end(),
+							[](const ResultCandidate& r1, const ResultCandidate& r2) {
+								return r1.best_overfit < r2.best_overfit;
+							})).best_overfit;
                     }
+                    else
+                    {
+						final_translation = best_candidate->final_translation;
+						final_rotation = best_candidate->final_rotation;
 
-                    item.translation(final_translation);
-                    item.rotation(final_rotation);
+						item.translation(final_translation);
+						item.rotation(final_rotation);
+                        can_pack = true;
+                    }
                 }
 
                 if (can_pack) {
