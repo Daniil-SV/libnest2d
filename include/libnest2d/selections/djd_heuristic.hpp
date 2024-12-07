@@ -132,7 +132,7 @@ public:
 
         std::copy(first, last, std::back_inserter(store_));
 
-        std::sort(store_.begin(), store_.end(), [](Item& i1, Item& i2) {
+        std::sort(std::execution::par, store_.begin(), store_.end(), [](Item& i1, Item& i2) {
             return i1.area() > i2.area();
         });
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 #include <iterator>
+#include <execution>
 
 #include <libnest2d/geometry_traits.hpp>
 
@@ -235,7 +236,8 @@ inline NfpResult<RawShape> nfpConvexOnly(const RawShape& sh,
         }
     }
    
-    std::sort(edgelist.begin(), edgelist.end(), 
+    
+    std::sort(std::execution::par, edgelist.begin(), edgelist.end(),
               [](const Edge& e1, const Edge& e2) 
     {
         Vertex ax(1, 0); // Unit vector for the X axis
@@ -530,9 +532,9 @@ NfpResult<RawShape> nfpSimpleSimple(const RawShape& cstationary,
         merged.reserve(Q.size() + R.size());
 
         merged.insert(merged.end(), R.begin(), R.end());
-        std::stable_sort(merged.begin(), merged.end(), sortfn);
+        std::stable_sort(std::execution::par, merged.begin(), merged.end(), sortfn);
         merged.insert(merged.end(), Q.begin(), Q.end());
-        std::stable_sort(merged.begin(), merged.end(), sortfn);
+        std::stable_sort(std::execution::par, merged.begin(), merged.end(), sortfn);
 
         // Step 2 "set i = 1, k = 1, direction = 1, s1 = q1"
         // we don't use i, instead, q is an iterator into Q. k would be an index
@@ -657,7 +659,7 @@ NfpResult<RawShape> nfpSimpleSimple(const RawShape& cstationary,
     EdgeRefList Bslope = Bref;  // copy Bref, we will make a slope diagram
 
     // make the slope diagram of B
-    std::sort(Bslope.begin(), Bslope.end(), sortfn);
+    std::sort(std::execution::par, Bslope.begin(), Bslope.end(), sortfn);
 
     auto slopeit = Bslope.begin(); // search for the first turning point
     while(!slopeit->isTurningPoint() && slopeit != Bslope.end()) slopeit++;

@@ -61,7 +61,7 @@ public:
         
         this->template remove_unpackable_items<Placer>(store_, bin, pconfig);
         
-        std::sort(store_.begin(), store_.end(), sortfunc);
+        std::sort(std::execution::par, store_.begin(), store_.end(), sortfunc);
 
         Placer placer(bin);
         placer.configure(pconfig);
