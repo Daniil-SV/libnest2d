@@ -76,7 +76,6 @@ public:
 
 	template<class Range = ConstItemRange<DefaultIter>>
 	PackResult trypack(Item& item, const Range& rem = Range()) {
-		if (item.area() >= freeArea()) return false;
 		return static_cast<Subclass*>(this)->trypack(item, rem);
 	}
 
@@ -93,6 +92,13 @@ public:
 
             static_cast<Subclass*>(this)->acceptResult(r);
         }
+    }
+
+    bool canPack(Item& item) const
+    {
+        if (item.area() < freeArea()) return true;
+
+        return false;
     }
 
     void unpackLast() {

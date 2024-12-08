@@ -654,6 +654,9 @@ public:
     /// Get the bin object.
     inline const BinType& bin() const { return impl_.bin(); }
 
+	/// Returns if bin possibly can hold item
+	inline bool canPack(Item& item) const { return impl_.canPack(item); }
+
     /// Set a new bin object.
     inline void bin(const BinType& bin) { impl_.bin(bin); }
 

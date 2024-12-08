@@ -119,13 +119,11 @@ public:
         while(it != store_.end() && !cancelled()) {
             bool was_packed = false;
             size_t j = 0;
+			auto& item = *it;
+			auto remains = rem(it, store_);
 
             Placer::PackResult candidate;
-
             while(!was_packed && !cancelled()) {
-				auto& item = *it;
-				auto remains = rem(it, store_);
-                
                 auto do_accept = [&makeProgress, &placers, &candidate, &item, &was_packed](Placer& placer, size_t index)
                     {
                         was_packed = candidate;
@@ -173,12 +171,17 @@ public:
 
 					for (size_t i = 0; placer_results.size() > i; i++)
 					{
-						placer_results[i] = std::async(std::launch::deferred | std::launch::async, do_pack, placers[i]);
+                        if (placers[i].canPack(item))
+                        {
+                            placer_results[i] = std::async(std::launch::deferred | std::launch::async, do_pack, placers[i]);
+                        }
 					}
 
 					for (size_t i = 0; placer_results.size() > i; i++)
 					{
 						auto& result = placer_results[i];
+                        if (!result.valid()) continue;
+
 						result.wait();
 						candidate = result.get();
 						do_accept(placers[i], i);
