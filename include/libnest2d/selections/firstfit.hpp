@@ -136,7 +136,7 @@ public:
 						makeProgress(placers[index], index);
                     };
 
-				auto do_pack = [&item, &remains](Placer& placer) -> Placer::PackResult
+				auto do_pack = [&item, &remains](Placer& placer) -> Placer::PackResult // TODO: add some kind of stop condition to stop async operations when was_packed already is true
 					{
 						return placer.trypack(item, remains);
 					};
