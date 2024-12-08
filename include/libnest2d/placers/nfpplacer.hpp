@@ -538,6 +538,14 @@ namespace libnest2d {
                     config_.on_preload(packeditems, config_);
             }
 
+            void acceptResult (PackResult& r)
+            {
+                if (r.overfit() == 0.0)
+                {
+                    m_merged_pile = nfp::merge(m_merged_pile, (*r.item_ptr_).transformedShape());
+                }
+            }
+
         private:
 
             using Shapes = TMultiShape<RawShape>;
@@ -933,7 +941,6 @@ namespace libnest2d {
 
                 if (can_pack) {
                     ret = PackResult(item);
-                    m_merged_pile = nfp::merge(m_merged_pile, item.transformedShape());
                 }
                 else {
                     ret = PackResult(best_overfit);

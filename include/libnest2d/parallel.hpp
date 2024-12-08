@@ -50,9 +50,11 @@ inline void enumerate(
 		for (TN fi = 0; fi < N; ++fi) rets[fi].wait();
 #endif
     }
-
-    // Single-core execution
-    for (TN n = 0; n < N; n++) fn(*(from + n), n);
+    else
+    {
+		// Single-core execution
+		for (TN n = 0; n < N; n++) fn(*(from + n), n);
+    }
 }
     
 }}

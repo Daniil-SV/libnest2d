@@ -19,6 +19,21 @@ public:
         * If true, checks all items to see if they can be packed into a texture. Can take a long time when there are a lot of items.
         */
         bool verify_items = true;
+           
+        /*
+        * If this option is enabled, then before starting to calculate position in current bucket, 
+        * it also starts calculating position on next texture in asynchronous mode. 
+        * This helps when you have a lot of items and you are guaranteed to get several buckets.
+        * In this way, if current bucket is too small, we can save time and get result from next bucket, 
+        * after which a new asynchronous operation is launched again, and so on until desired bucket is received or a new bucket is created.
+        */
+        bool texture_parallel = true;
+
+        /*
+        * Created for the same purpose as "texture_parallel", but in this case asynchronous calculation operations called for each existing bucket. 
+        * Be careful with this, it can consume a lot of resources, but at the same time it can be the fastest solution.
+        */
+        bool texture_parallel_hard = true;
     };
 
 public:
@@ -104,25 +119,93 @@ public:
         while(it != store_.end() && !cancelled()) {
             bool was_packed = false;
             size_t j = 0;
+
+            Placer::PackResult candidate;
+
             while(!was_packed && !cancelled()) {
-                for(; j < placers.size() && !was_packed && !cancelled(); j++) {
-                    if((was_packed = placers[j].pack(*it, rem(it, store_) ))) {
-                        it->get().binId(int(j));
-                        makeProgress(placers[j], j);
-                    }
+				auto& item = *it;
+				auto remains = rem(it, store_);
+                
+                auto do_accept = [&makeProgress, &placers, &candidate, &item, &was_packed](Placer& placer, size_t index)
+                    {
+                        was_packed = candidate;
+                        if (!was_packed) return;
+
+                        item.get().binId(index);
+                        placer.accept(candidate);
+						makeProgress(placers[index], index);
+                    };
+
+				auto do_pack = [&item, &remains](Placer& placer) -> Placer::PackResult
+					{
+						return placer.trypack(item, remains);
+					};
+
+                if (config_.texture_parallel)
+                {
+                    std::future<Placer::PackResult> next_texture_result;
+					for (; j < placers.size() && !was_packed && !cancelled(); j++) {
+						Placer& current_placer = placers[j];
+
+						// if not first or last placer
+						if (j != placers.size() - 1)
+						{
+							next_texture_result = std::async(std::launch::deferred | std::launch::async, do_pack, placers[j + 1]);
+						}
+
+						// if placer is first then use sync packaging
+						if (j == 0)
+						{
+							candidate = do_pack(current_placer);
+						}
+						else
+						{
+							next_texture_result.wait();
+							candidate = next_texture_result.get();
+						}
+
+						do_accept(current_placer, j);
+					}
+                }
+                else if (config_.texture_parallel_hard)
+                {
+					std::vector<std::future<Placer::PackResult>> placer_results(placers.size());
+
+					for (size_t i = 0; placer_results.size() > i; i++)
+					{
+						placer_results[i] = std::async(std::launch::deferred | std::launch::async, do_pack, placers[i]);
+					}
+
+					for (size_t i = 0; placer_results.size() > i; i++)
+					{
+						auto& result = placer_results[i];
+						result.wait();
+						candidate = result.get();
+						do_accept(placers[i], i);
+						if (was_packed) break;
+					}
+                }
+                else
+                {
+					for (; j < placers.size() && !was_packed && !cancelled(); j++) { // Original way to process items
+                        
+                        candidate = do_pack(placers[j]);
+                        do_accept(placers[j], j);
+					}
                 }
 
-                if(!was_packed) {
-                    placers.emplace_back(bin);
-                    placers.back().configure(pconfig);
-                    packed_bins_.emplace_back();
-                    j = placers.size() - 1;
-                }
+				if (!was_packed) {
+					Placer& new_placer = placers.emplace_back(bin);
+					placers.back().configure(pconfig);
+					packed_bins_.emplace_back();
+					candidate = do_pack(new_placer);
+
+					do_accept(new_placer, placers.size() - 1);
+				}
             }
             ++it;
         }
     }
-
 };
 
 }

@@ -55,6 +55,10 @@ public:
         return r;
     }
 
+	void acceptResult(PackResult& item)
+	{
+	}
+
     enum class Dir {
         LEFT,
         DOWN

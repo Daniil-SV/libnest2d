@@ -23,13 +23,15 @@ public:
     using DefaultIter = typename ItemGroup::const_iterator;
 
     class PackResult {
+    private:
         Item *item_ptr_;
         Vertex move_;
         Radians rot_;
-        double overfit_;
+        double overfit_ = 0.0;
         friend class PlacerBoilerplate;
         friend Subclass;
 
+    public:
         PackResult(Item& item):
             item_ptr_(&item),
             move_(item.translation()),
@@ -61,16 +63,22 @@ public:
     }
 
     template<class Range = ConstItemRange<DefaultIter>>
-    bool pack(Item& item, const Range& rem = Range(), int obj_distance = 0) {
+    bool pack(Item& item, const Range& rem = Range()) {
         if (item.area() >= freeArea()) return false;
 
-        auto&& r = static_cast<Subclass*>(this)->trypack(item, rem);
+        PackResult&& r = static_cast<Subclass*>(this)->trypack(item, rem);
         if(r) {
             items_.emplace_back(*(r.item_ptr_));
             farea_ += item.area();
         }
         return r;
     }
+
+	template<class Range = ConstItemRange<DefaultIter>>
+	PackResult trypack(Item& item, const Range& rem = Range()) {
+		if (item.area() >= freeArea()) return false;
+		return static_cast<Subclass*>(this)->trypack(item, rem);
+	}
 
     void preload(const ItemGroup& packeditems) {
         items_.insert(items_.end(), packeditems.begin(), packeditems.end());
@@ -81,6 +89,9 @@ public:
             r.item_ptr_->translation(r.move_);
             r.item_ptr_->rotation(r.rot_);
             items_.emplace_back(*(r.item_ptr_));
+            farea_ += (*(r.item_ptr_)).area();
+
+            static_cast<Subclass*>(this)->acceptResult(r);
         }
     }
 
