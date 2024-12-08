@@ -27,13 +27,13 @@ public:
         * In this way, if current bucket is too small, we can save time and get result from next bucket, 
         * after which a new asynchronous operation is launched again, and so on until desired bucket is received or a new bucket is created.
         */
-        bool texture_parallel = true;
+        bool texture_parallel = false;
 
         /*
         * Created for the same purpose as "texture_parallel", but in this case asynchronous calculation operations called for each existing bucket. 
         * Be careful with this, it can consume a lot of resources, but at the same time it can be the fastest solution.
         */
-        bool texture_parallel_hard = true;
+        bool texture_parallel_hard = false;
     };
 
 public:
